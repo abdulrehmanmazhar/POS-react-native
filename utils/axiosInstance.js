@@ -1,7 +1,7 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_BASE_URL = 'https://pos-server-production-1ee6.up.railway.app/api/v1'; // Replace with your server's base URL
+const API_BASE_URL = 'https://pos-server-production-b2d4.up.railway.app/api/v1'; // Replace with your server's base URL
 
 console.log(`connected to server ${API_BASE_URL}`)
 

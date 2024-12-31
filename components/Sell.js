@@ -7,26 +7,23 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import axiosInstance from '../utils/axiosInstance';
 import { Picker } from '@react-native-picker/picker';
-
 
 const Sell = () => {
   const [updation, setUpdation] = useState('');
   const [customers, setCustomers] = useState([]);
   const [products, setProducts] = useState([]);
-
   const [selectedCustomer, setSelectedCustomer] = useState('');
   const [searchCustomer, setSearchCustomer] = useState('');
-
   const [currentProduct, setCurrentProduct] = useState(null);
   const [quantity, setQuantity] = useState(1);
-
   const [addedItems, setAddedItems] = useState([]);
   const [orderId, setOrderId] = useState();
-
   const [payment, setPayment] = useState(0);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     fetchCustomers();
@@ -68,7 +65,6 @@ const Sell = () => {
             const { order } = response.data;
             setOrderId(order._id);
             syncCart(order);
-
             setCurrentProduct(null);
             setQuantity(1);
           }
@@ -92,12 +88,22 @@ const Sell = () => {
   };
 
   const handleDeleteItem = async (index) => {
+    setIsDeleting(true); // Show loading indicator
     try {
-      await axiosInstance.delete(`/delete-cart/${orderId}/${index}`);
-      setUpdation('update');
+      // Call the delete API
+      const response = await axiosInstance.delete(`/delete-cart/${orderId}/${index}`);
+      
+      // If the delete operation is successful, update the UI optimistically
+      if (response.status === 200) {
+        setAddedItems((prevItems) => prevItems.filter((_, i) => i !== index)); // Optimistic UI update
+        Alert.alert('Success', 'Item deleted successfully');
+        syncCart({ _id: orderId }); // Sync cart after deletion
+      }
     } catch (error) {
       console.error('Failed to delete item:', error);
       Alert.alert('Error', 'Failed to delete item');
+    } finally {
+      setIsDeleting(false); // Hide loading indicator
     }
   };
 
@@ -129,6 +135,10 @@ const Sell = () => {
 
   const totalBill = addedItems.reduce(
     (sum, item) => sum + item.product.price * item.qty,
+    0
+  );
+  const totalDiscount = addedItems.reduce(
+    (sum, item) => sum + item.product.discount * item.qty,
     0
   );
 
@@ -185,23 +195,25 @@ const Sell = () => {
             title="Delete"
             onPress={() => handleDeleteItem(index)}
             color="red"
+            disabled={isDeleting} // Disable button when deleting
           />
         </View>
       ))}
 
-<Text>Total Bill: {totalBill}</Text>
-<TextInput
-  style={styles.input}
-  keyboardType="numeric"
-  placeholder="Payment"
-  value={payment.toString()}
-  onChangeText={(text) => setPayment(Number(text))}
-/>
-<View style={styles.buttonRow}>
-  <Button title="Bill" onPress={addOrderHandler} style={styles.button} />
-  <Button title="Save" onPress={resetState} color="orange" style={styles.button} />
-</View>
-
+      <Text>Total Bill: Rs. {totalBill}</Text>
+      <Text>Discount: Rs. {totalDiscount}</Text>
+      <Text>Sub Total: Rs. {totalBill-totalDiscount}</Text>
+      <TextInput
+        style={styles.input}
+        keyboardType="numeric"
+        placeholder="Payment"
+        value={payment.toString()}
+        onChangeText={(text) => setPayment(Number(text))}
+      />
+      <View style={styles.buttonRow}>
+        <Button title="Bill" onPress={addOrderHandler} style={styles.button} />
+        <Button title="Save" onPress={resetState} color="orange" style={styles.button} />
+      </View>
     </ScrollView>
   );
 };
