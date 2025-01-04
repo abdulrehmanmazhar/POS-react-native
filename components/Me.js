@@ -5,6 +5,8 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  ScrollView,
+  RefreshControl,
 } from 'react-native';
 import axiosInstance from '../utils/axiosInstance';
 
@@ -12,19 +14,22 @@ const Me = ({ handleLogout }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchUserData = async () => {
+    try {
+      setError(null); // Reset error on refresh
+      const response = await axiosInstance.get('/me');
+      setUser(response.data.user);
+    } catch (err) {
+      setError('Failed to fetch user data.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchUserData = async () => {
-      try {
-        const response = await axiosInstance.get('/me');
-        setUser(response.data.user);
-      } catch (err) {
-        setError('Failed to fetch user data.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchUserData();
   }, []);
 
@@ -36,26 +41,30 @@ const Me = ({ handleLogout }) => {
     );
   }
 
-  if (error) {
-    return (
-      <View style={styles.screen}>
-        <Text style={styles.errorText}>{error}</Text>
-      </View>
-    );
-  }
-
   return (
-    <View style={styles.screen}>
-      {user && (
-        <View style={styles.userInfo}>
-          <Text style={styles.userName}>Name: {user.name}</Text>
-          <Text style={styles.userEmail}>Email: {user.email}</Text>
-        </View>
+    <ScrollView
+      contentContainerStyle={styles.screen}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={() => {
+          setRefreshing(true);
+          fetchUserData();
+        }} />
+      }
+    >
+      {error ? (
+        <Text style={styles.errorText}>{error}</Text>
+      ) : (
+        user && (
+          <View style={styles.userInfo}>
+            <Text style={styles.userName}>Name: {user.name}</Text>
+            <Text style={styles.userEmail}>Email: {user.email}</Text>
+          </View>
+        )
       )}
       <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
         <Text style={styles.logoutButtonText}>Logout</Text>
       </TouchableOpacity>
-    </View>
+    </ScrollView>
   );
 };
 
@@ -63,7 +72,7 @@ export default Me;
 
 const styles = StyleSheet.create({
   screen: {
-    flex: 1,
+    flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#f7f8fa',

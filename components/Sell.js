@@ -10,35 +10,23 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import axiosInstance from '../utils/axiosInstance';
-import { Picker } from '@react-native-picker/picker';
+import { useRoute } from '@react-navigation/native';
 
 const Sell = () => {
-  const [updation, setUpdation] = useState('');
-  const [customers, setCustomers] = useState([]);
+  const route = useRoute();
   const [products, setProducts] = useState([]);
   const [selectedCustomer, setSelectedCustomer] = useState('');
-  const [searchCustomer, setSearchCustomer] = useState('');
-  const [currentProduct, setCurrentProduct] = useState(null);
-  const [quantity, setQuantity] = useState(1);
   const [addedItems, setAddedItems] = useState([]);
-  const [orderId, setOrderId] = useState();
   const [payment, setPayment] = useState(0);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const { customerId, customerName } = route.params || {};
+  const [orderId, setOrderId] = useState(null);
 
   useEffect(() => {
-    fetchCustomers();
-    fetchProducts();
-  }, []);
-
-  const fetchCustomers = async () => {
-    try {
-      const { data } = await axiosInstance.get('/get-customers');
-      setCustomers(data.customers);
-    } catch (error) {
-      console.error('Error fetching customers:', error);
-      Alert.alert('Error', 'Failed to fetch customers');
+    if (customerId) {
+      setSelectedCustomer(customerId);
     }
-  };
+    fetchProducts();
+  }, [customerId]);
 
   const fetchProducts = async () => {
     try {
@@ -50,159 +38,157 @@ const Sell = () => {
     }
   };
 
-  const handleAddItem = async () => {
-    if (currentProduct && quantity > 0 && selectedCustomer) {
-      const selectedProduct = products.find((p) => p._id === currentProduct);
+  const handleToggleItem = (productId) => {
+    setAddedItems((prevItems) => {
+      const exists = prevItems.find((item) => item.productId === productId);
+      if (exists) {
+        return prevItems.filter((item) => item.productId !== productId);
+      }
+      return [...prevItems, { productId, qty: 1 }];
+    });
+  };
 
-      if (selectedProduct) {
-        try {
-          const response = await axiosInstance.post(
-            `/fill-cart/${selectedCustomer}`,
-            { productId: selectedProduct._id, qty: quantity }
-          );
+  const handleQuantityChange = (productId, qty) => {
+    setAddedItems((prevItems) =>
+      prevItems.map((item) =>
+        item.productId === productId ? { ...item, qty: Number(qty) } : item
+      )
+    );
+  };
 
-          if (response.status === 200) {
-            const { order } = response.data;
-            setOrderId(order._id);
-            syncCart(order);
-            setCurrentProduct(null);
-            setQuantity(1);
-          }
-        } catch (error) {
-          console.error('Error adding item to cart:', error);
-          Alert.alert('Error', 'Failed to add item to cart');
+  const handleSave = async () => {
+    if (addedItems.length === 0) {
+      return Alert.alert('Error', 'No items selected to save.');
+    }
+  
+    try {
+      let tempOrderId = orderId; // Start with the current `orderId`.
+  
+      for (const item of addedItems) {
+        const { data } = await axiosInstance.post(`/fill-cart/${selectedCustomer}`, item);
+        if (data.order && data.order._id) {
+          tempOrderId = data.order._id; // Update tempOrderId dynamically.
         }
       }
-    } else {
-      Alert.alert('Error', 'Please select a customer, product, and valid quantity.');
-    }
-  };
-
-  const syncCart = async (order) => {
-    try {
-      const { data } = await axiosInstance.get(`/get-order/${order._id}`);
-      setAddedItems(data.order.cart);
-    } catch (error) {
-      console.error('Error syncing cart:', error);
-    }
-  };
-
-  const handleDeleteItem = async (index) => {
-    setIsDeleting(true); // Show loading indicator
-    try {
-      // Call the delete API
-      const response = await axiosInstance.delete(`/delete-cart/${orderId}/${index}`);
-      
-      // If the delete operation is successful, update the UI optimistically
-      if (response.status === 200) {
-        setAddedItems((prevItems) => prevItems.filter((_, i) => i !== index)); // Optimistic UI update
-        Alert.alert('Success', 'Item deleted successfully');
-        syncCart({ _id: orderId }); // Sync cart after deletion
+  
+      if (!tempOrderId) {
+        throw new Error('Failed to retrieve orderId from server.');
       }
+  
+      console.log(tempOrderId);
+      setOrderId(tempOrderId); // Update state after all operations are complete.
+      Alert.alert('Success', 'Cart saved successfully!');
+      setAddedItems([]); // Clear added items for a fresh cart.
     } catch (error) {
-      console.error('Failed to delete item:', error);
-      Alert.alert('Error', 'Failed to delete item');
-    } finally {
-      setIsDeleting(false); // Hide loading indicator
+      console.error('Error saving cart:', error);
+      Alert.alert('Error', 'Failed to save cart.');
     }
   };
-
-  const addOrderHandler = async () => {
-    if (!orderId) return Alert.alert('Error', 'No order found');
-
-    try {
-      await axiosInstance.post(`/add-order/${orderId}`, {
-        billPayment: payment,
-        customerId: selectedCustomer,
-      });
-
-      Alert.alert('Success', 'Order placed successfully');
-      resetState();
-    } catch (error) {
-      console.error('Failed to place order:', error);
-      Alert.alert('Error', 'Failed to place order');
-    }
-  };
-
-  const resetState = () => {
-    setSelectedCustomer('');
-    setCurrentProduct(null);
-    setQuantity(1);
-    setAddedItems([]);
-    setOrderId(undefined);
-    setPayment(0);
-  };
+  
+  
+  
 
   const totalBill = addedItems.reduce(
-    (sum, item) => sum + item.product.price * item.qty,
+    (sum, item) => {
+      const product = products.find((p) => p._id === item.productId);
+      return sum + (product ? product.price * item.qty : 0);
+    },
     0
   );
+
   const totalDiscount = addedItems.reduce(
-    (sum, item) => sum + item.product.discount * item.qty,
+    (sum, item) => {
+      const product = products.find((p) => p._id === item.productId);
+      return sum + (product ? product.discount * item.qty : 0);
+    },
     0
   );
+  const handleSaveAndBill = async () =>{
+    try {
+      if (addedItems.length === 0) {
+        return Alert.alert('Error', 'No items selected to save.');
+      }
+    
+      let tempOrderId = orderId; // Start with the current `orderId`.
+      try {
+    
+        for (const item of addedItems) {
+          const { data } = await axiosInstance.post(`/fill-cart/${selectedCustomer}`, item);
+          if (data.order && data.order._id) {
+            tempOrderId = data.order._id; // Update tempOrderId dynamically.
+          }
+        }
+    
+        if (!tempOrderId) {
+          throw new Error('Failed to retrieve orderId from server.');
+        }
+    
+        console.log(tempOrderId);
+        setOrderId(tempOrderId); // Update state after all operations are complete.
+        Alert.alert('Success', 'Cart saved successfully!');
+        setAddedItems([]); // Clear added items for a fresh cart.
+      } catch (error) {
+        console.error('Error saving cart:', error);
+        Alert.alert('Error', 'Failed to save cart.');
+      }
+      console.log(payment, orderId);
+      const response = await axiosInstance.post(`/add-order/${tempOrderId}`, {billPayment:payment, customerId, instructionNote:''});
+      Alert.alert('Success', 'Order Placed successfully!');
+      setPayment(0);
+    } catch (error) {
+      console.error('Error placing order:', error);
+      Alert.alert('Error', 'Failed to place order.');
+    }
+
+  }
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.heading}>Sell</Text>
+      <Text style={styles.heading}>Customer: {customerName}</Text>
 
-      <Picker
-        selectedValue={selectedCustomer}
-        onValueChange={(itemValue) => setSelectedCustomer(itemValue)}
-        style={styles.picker}
-      >
-        <Picker.Item label="Select Customer" value="" />
-        {customers.map((customer) => (
-          <Picker.Item
-            key={customer._id}
-            label={customer.name}
-            value={customer._id}
-          />
-        ))}
-      </Picker>
-
-      <View style={styles.row}>
-        <Picker
-          selectedValue={currentProduct}
-          onValueChange={(itemValue) => setCurrentProduct(itemValue)}
-          style={[styles.picker, { flex: 3 }]}
-        >
-          <Picker.Item label="Select Product" value="" />
-          {products.map((product) => (
-            <Picker.Item
-              key={product._id}
-              label={`${product.name}(${product.category})`}
-              value={product._id}
-            />
-          ))}
-        </Picker>
-        <TextInput
-          style={[styles.input, { flex: 1 }]}
-          keyboardType="numeric"
-          placeholder="Quantity"
-          value={quantity.toString()}
-          onChangeText={(text) => setQuantity(Number(text))}
-        />
-        <Button title="Add" onPress={handleAddItem} />
-      </View>
-
-      {/* Render added items */}
-      {addedItems.map((item, index) => (
-        <View key={index} style={styles.item}>
-          <Text>{`${item.product.name} (${item.product.category})`}</Text>
-          <Text>{item.qty}</Text>
-          <Button
-            title="Delete"
-            onPress={() => handleDeleteItem(index)}
-            color="red"
-            disabled={isDeleting} // Disable button when deleting
-          />
+      <View>
+        <Text style={styles.header}>Products</Text>
+        <View style={styles.tableHeader}>
+          <Text style={styles.columnHeader}>Name</Text>
+          <Text style={styles.columnHeader}>Dis.</Text>
+          <Text style={styles.columnHeader}>Stock</Text>
+          <Text style={styles.columnHeader}>Qty</Text>
+          <Text style={styles.columnHeader}>Action</Text>
         </View>
-      ))}
+
+        {products.map((product) => {
+          const isSelected = addedItems.some((item) => item.productId === product._id);
+
+          return (
+            <View key={product._id} style={styles.row}>
+              <Text style={styles.cell}>{`${product.name}(${product.category})`}</Text>
+              <Text style={styles.cell}>{product.discount}</Text>
+              <Text style={styles.cell}>{product.stockQty}</Text>
+              {isSelected ? (
+                <TextInput
+                  style={styles.input}
+                  keyboardType="numeric"
+                  value={
+                    addedItems.find((item) => item.productId === product._id)?.qty.toString() || '1'
+                  }
+                  onChangeText={(text) => handleQuantityChange(product._id, text)}
+                />
+              ) : (
+                <Text style={styles.cell}>-</Text>
+              )}
+              <Button
+                title={isSelected ? 'Remove' : 'Add'}
+                onPress={() => handleToggleItem(product._id)}
+              />
+            </View>
+          );
+        })}
+      </View>
 
       <Text>Total Bill: Rs. {totalBill}</Text>
       <Text>Discount: Rs. {totalDiscount}</Text>
-      <Text>Sub Total: Rs. {totalBill-totalDiscount}</Text>
+      <Text>Sub Total: Rs. {totalBill - totalDiscount}</Text>
+
       <TextInput
         style={styles.input}
         keyboardType="numeric"
@@ -210,9 +196,10 @@ const Sell = () => {
         value={payment.toString()}
         onChangeText={(text) => setPayment(Number(text))}
       />
+
       <View style={styles.buttonRow}>
-        <Button title="Bill" onPress={addOrderHandler} style={styles.button} />
-        <Button title="Save" onPress={resetState} color="orange" style={styles.button} />
+        <Button title="Save without payment" onPress={handleSave} color="orange" style={styles.button} />
+        <Button title="Save & bill" onPress={handleSaveAndBill} color="green" style={styles.button} />
       </View>
     </ScrollView>
   );
@@ -220,26 +207,23 @@ const Sell = () => {
 
 const styles = StyleSheet.create({
   container: { padding: 16, paddingTop: 40 },
-  heading: { fontSize: 24, textAlign: 'center', marginBottom: 16 },
-  picker: { marginBottom: 16, borderWidth: 1, borderColor: '#ccc', padding: 8 },
-  row: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-  input: { borderWidth: 1, borderColor: '#ccc', padding: 8, marginBottom: 16 },
-  item: {
+  heading: { fontSize: 18, textAlign: 'center', marginBottom: 16 },
+  header: { fontSize: 16, fontWeight: 'bold', marginBottom: 8 },
+  tableHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 8,
-    borderWidth: 1,
+    borderBottomWidth: 1,
     borderColor: '#ccc',
-    padding: 8,
+    paddingBottom: 4,
   },
+  columnHeader: { fontWeight: 'bold', flex: 1, textAlign: 'center' },
+  row: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  cell: { flex: 1, textAlign: 'center' },
+  input: { borderWidth: 1, borderColor: '#ccc', padding: 4, flex: 1, textAlign: 'center' },
   buttonRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginTop: 16,
-  },
-  button: {
-    flex: 1,  // Make each button take up 50% of the space
-    marginHorizontal: 4, // Optional: adds a small space between the buttons
   },
 });
 

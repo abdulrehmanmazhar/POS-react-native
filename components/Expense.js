@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, Alert, RefreshControl } from 'react-native';
 // import axios from 'axios';
 import axiosInstance from '../utils/axiosInstance';
 
@@ -7,22 +7,39 @@ const Expense = () => {
   const [expenses, setExpenses] = useState([]);
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
-  const [refreshExpenses, setRefreshExpenses] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [userId, setUserId] = useState(null);
+  
+  const fetchUser = async () => {
+    try {
+      const response = await axiosInstance.get('/me');
+      setUserId(response.data.user._id);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to fetch user data.');
+      console.error('Error fetching user data:', error);
+    }
+  };
 
-  const syncExpenses = () => {
-    axiosInstance
-      .get("/get-today-transactions")
-      .then((response) => {
-        setExpenses(response.data.transactions);
-      })
-      .catch((error) => {
-        console.error('Error fetching expenses:', error);
-      });
+  const syncExpenses = async () => {
+    try {
+      const response = await axiosInstance.get("/get-today-transactions");
+      setExpenses(response.data.transactions.filter((transaction) => transaction.createdBy === userId));
+      console.log(userId)
+    } catch (error) {
+      console.error('Error fetching expenses:', error);
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await syncExpenses();
+    setRefreshing(false);
   };
 
   useEffect(() => {
+    fetchUser()
     syncExpenses();
-  }, [refreshExpenses]);
+  }, []);
 
   const handleAddExpense = () => {
     if (description.trim() === '' || amount === '' || isNaN(amount) || amount <= 0) {
@@ -40,7 +57,7 @@ const Expense = () => {
       .post("/create-transaction", newExpense)
       .then(() => {
         Alert.alert('Success', 'Expense added successfully');
-        setRefreshExpenses(!refreshExpenses);
+        onRefresh(); // Refresh the list after adding a new expense
         setDescription('');
         setAmount('');
       })
@@ -54,7 +71,7 @@ const Expense = () => {
       .delete(`/delete-transaction/${id}`)
       .then(() => {
         Alert.alert('Success', 'Expense deleted successfully');
-        setRefreshExpenses(!refreshExpenses);
+        onRefresh(); // Refresh the list after deleting an expense
       })
       .catch((error) => {
         Alert.alert('Error', error.response?.data?.message || 'An error occurred');
@@ -104,6 +121,9 @@ const Expense = () => {
         renderItem={renderExpenseItem}
         keyExtractor={(item) => item._id}
         contentContainerStyle={styles.list}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       />
     </View>
   );
@@ -114,7 +134,7 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 20,
     backgroundColor: '#f7f8fa',
-    paddingTop: 40
+    paddingTop: 40,
   },
   title: {
     fontSize: 22,

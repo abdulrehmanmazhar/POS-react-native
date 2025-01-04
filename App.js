@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createStackNavigator } from '@react-navigation/stack';
 import { NavigationContainer } from '@react-navigation/native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import axiosInstance from './utils/axiosInstance';
@@ -19,6 +20,14 @@ import Customer from './components/Customer';
 import Expense from './components/Expense';
 
 const Tab = createBottomTabNavigator();
+const Stack = createStackNavigator();
+
+const CustomerStack = () => (
+  <Stack.Navigator>
+    <Stack.Screen name="CustomerMain" component={Customer} options={{ headerShown: false }} />
+    <Stack.Screen name="Sell" component={Sell} />
+  </Stack.Navigator>
+);
 
 const App = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -42,9 +51,7 @@ const App = () => {
     setIsAuthenticated(false);
   };
 
-  // Dynamic padding for large notches (default to 44px for iOS or StatusBar height for Android)
-  const dynamicPaddingTop =
-    Platform.OS === 'ios' ? 44 : 50;
+  const dynamicPaddingTop = Platform.OS === 'ios' ? 44 : 50;
 
   if (!isAuthenticated) {
     return (
@@ -86,9 +93,6 @@ const App = () => {
             let iconName;
 
             switch (route.name) {
-              case 'Sell':
-                iconName = focused ? 'cart' : 'cart-outline';
-                break;
               case 'Orders':
                 iconName = focused ? 'list' : 'list-outline';
                 break;
@@ -109,9 +113,8 @@ const App = () => {
           },
         })}
       >
-        <Tab.Screen name="Sell" component={Sell} />
         <Tab.Screen name="Orders" component={Orders} />
-        <Tab.Screen name="Customer" component={Customer} />
+        <Tab.Screen name="Customer" component={CustomerStack} />
         <Tab.Screen name="Expense" component={Expense} />
         <Tab.Screen name="Me">
           {() => <Me handleLogout={handleLogout} />}
