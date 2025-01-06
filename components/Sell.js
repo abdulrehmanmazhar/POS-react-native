@@ -198,7 +198,7 @@ const Sell = () => {
       />
 
       <View style={styles.buttonRow}>
-        <Button title="Save without payment" onPress={handleSave} color="orange" style={styles.button} />
+        {/* <Button title="Save without payment" onPress={handleSave} color="orange" style={styles.button} /> */}
         <Button title="Save & bill" onPress={handleSaveAndBill} color="green" style={styles.button} />
       </View>
     </ScrollView>

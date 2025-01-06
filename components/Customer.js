@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -38,7 +38,7 @@ const Customer = ({ navigation }) => {
     }
   };
 
-  const handleSearch = (query) => {
+  const handleSearch = useCallback((query) => {
     setSearchQuery(query);
     const lowerQuery = query.toLowerCase();
     setFilteredCustomers(
@@ -48,7 +48,7 @@ const Customer = ({ navigation }) => {
           customer.contact.toLowerCase().includes(lowerQuery)
       )
     );
-  };
+  }, [customers]);
 
   const handleInputChange = (key, value) => {
     setNewCustomer((prev) => ({ ...prev, [key]: value }));
@@ -77,38 +77,14 @@ const Customer = ({ navigation }) => {
     }
   };
 
-  const handleDeleteCustomer = (id) => {
-    Alert.alert('Confirm Delete', 'Are you sure you want to delete this customer?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await axiosInstance.delete(`/delete-customer/${id}`);
-            Alert.alert('Success', 'Customer deleted successfully');
-            fetchCustomers();
-          } catch (error) {
-            console.error(error);
-            Alert.alert('Error', 'Failed to delete customer');
-          }
-        },
-      },
-    ]);
-  };
-
-  const handleEditCustomer = (customer) => {
-    setNewCustomer(customer);
-    setView('add');
-  };
-
-  const CustomerList = () => (
+  const CustomerList = useCallback(() => (
     <>
       <TextInput
         style={styles.searchBar}
         placeholder="Search by name or contact"
         value={searchQuery}
         onChangeText={handleSearch}
+        autoFocus={true} // Ensure the keyboard remains open
       />
       <FlatList
         data={filteredCustomers}
@@ -126,22 +102,18 @@ const Customer = ({ navigation }) => {
               >
                 <Text style={styles.buttonText}>Edit</Text>
               </TouchableOpacity>
-              {/* <TouchableOpacity
+              <TouchableOpacity
+                onPress={() => navigation.navigate('Sell', { customerId: item._id, customerName: item.name })}
                 style={[styles.button, styles.deleteButton]}
-                onPress={() => handleDeleteCustomer(item._id)}
               >
-                <Text style={styles.buttonText}>Delete</Text>
-              </TouchableOpacity> */}
-              <TouchableOpacity onPress={() => navigation.navigate('Sell',{customerId:item._id, customerName:item.name})} style={[styles.button, styles.deleteButton]}>
-  <Text>Go to Sell</Text>
-</TouchableOpacity>
-
+                <Text>Go to Sell</Text>
+              </TouchableOpacity>
             </View>
           </View>
         )}
       />
     </>
-  );
+  ), [filteredCustomers, refreshing]);
 
   return (
     <View style={styles.container}>
